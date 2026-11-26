@@ -43,3 +43,18 @@ or you can use a Quarto template that bundles a .qmd starter file:
 quarto use template kazuyanagimoto/quarto-academic-typst
 ```
 
+## Python Templates
+
+Pure-Python templates (no R dependency, using the `jupyter: python3` engine) are also available:
+
+- [`template-python.qmd`](template-python.qmd): Minimal example with `matplotlib` plots, booktabs Typst tables, and an appendix (self-contained offline `mtcars` data).
+- [`template-full-python.qmd`](template-full-python.qmd): Full example using the Palmer penguins dataset with faceted `matplotlib` plots, KDE density panels, grouped summary tables, `statsmodels` OLS regression tables, and LaTeX-to-MiTeX math rendering inside Typst tables.
+
+Install the Python dependencies listed in [`requirements.txt`](requirements.txt) and render either template with Quarto:
+
+```{.bash}
+pip install -r requirements.txt
+quarto render template-python.qmd
+quarto render template-full-python.qmd
+```
+

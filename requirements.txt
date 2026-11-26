@@ -1,0 +1,14 @@
+# Quarto Jupyter engine
+jupyter
+ipykernel
+pyyaml
+
+# Core data & plotting (template-python.qmd & template-full-python.qmd)
+numpy
+pandas
+matplotlib
+
+# Statistical analysis & demo dataset (template-full-python.qmd)
+scipy
+statsmodels
+palmerpenguins

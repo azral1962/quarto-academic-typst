@@ -11,3 +11,5 @@ docs/
 .vscode/
 .Renviron
 **/*.quarto_ipynb
+
+/.luarc.json

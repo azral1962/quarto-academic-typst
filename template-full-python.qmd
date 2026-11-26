@@ -1,0 +1,589 @@
+---
+title: Quarto Academic Typst
+subtitle: A Minimalistic Quarto + Typst Template for Academic Writing
+header: Please click [HERE](https://kazuyanagimoto.com/quarto-academic-typst/template-full.pdf) for the latest version.
+author:
+  - name: Kazuharu Yanagimoto
+    email: yanagimoto@econ.kobe-u.ac.jp
+    orcid: 0009-0007-1967-8304
+    affiliations:
+      - name: Kobe University
+abstract: |
+  {{< lipsum 1 >}}
+thanks: |
+  This template is inspired by Kieran Healy's [LaTeX and Rmd template](https://github.com/kjhealy/latex-custom-kjh) and
+  Andrew Heiss's [Hikmah Quarto template](https://github.com/andrewheiss/hikmah-academic-quarto).
+keywords: [Quarto, Typst, format]
+custom-keywords:
+  - name: JEL Codes
+    values: [J16, J22, J31]
+date: today
+date-format: full
+bibliography: references.bib
+format:
+  academic-typst:
+    section-numbering: "1.1.1"
+    bibliographystyle: "chicago-author-date"
+    include-in-header:
+      - text: '#import "@preview/mitex:0.2.7": *'
+brand:
+  typography:
+    fonts:
+      - family: Jost
+        source: google
+        weight: [100, 200, 300, 400, 500, 600, 700, 800, 900]
+      - family: Libertinus Serif
+        source: file
+        files:
+          - path: static/fonts/Libertinus-7.051/static/OTF/LibertinusSerif-Regular.otf
+          - path: static/fonts/Libertinus-7.051/static/OTF/LibertinusSerif-Italic.otf
+            style: italic
+      - family: Libertinus Math
+        source: file
+        files:
+          - path: static/fonts/Libertinus-7.051/static/OTF/LibertinusMath-Regular.otf
+    base: Libertinus Serif
+    headings: Jost
+  defaults:
+    academic-typst:
+      mathfont: Libertinus Math
+jupyter: python3
+execute:
+  echo: false
+  warning: false
+---
+
+This document shows a practical Python usage of the template.
+I use the Palmer penguins dataset [@horst2020] to demonstrate the features of the template.
+All R code from `template-full.qmd` has been replaced with pure Python equivalents (`matplotlib`, `pandas`, `scipy`, and `statsmodels`).
+
+```{python}
+#| label: setup
+import re
+from collections.abc import Callable
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import font_manager
+from scipy.stats import gaussian_kde
+import statsmodels.formula.api as smf
+from palmerpenguins import load_penguins
+from IPython.display import Markdown
+
+penguins = load_penguins()
+
+COLOR_ACCENT = "#107895"
+COLOR_ACCENT2 = "#9a2515"
+COLOR_ACCENT3 = "#e64173"
+
+SPECIES_ORDER = ["Adelie", "Chinstrap", "Gentoo"]
+SPECIES_COLORS = {
+    "Adelie": COLOR_ACCENT,
+    "Chinstrap": COLOR_ACCENT2,
+    "Gentoo": COLOR_ACCENT3,
+}
+SPECIES_MARKERS = {
+    "Adelie": "o",
+    "Chinstrap": "^",
+    "Gentoo": "s",
+}
+
+# Register bundled Jost fonts if present so plots match document typography offline
+for font_file in Path("static/fonts/Jost/static").glob("Jost-*.ttf"):
+    font_manager.fontManager.addfont(str(font_file))
+
+plt.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Roboto Condensed", "Jost", "DejaVu Sans"],
+        "axes.edgecolor": "none",
+        "axes.linewidth": 0,
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "savefig.dpi": 300,
+    }
+)
+
+
+def apply_theme_quarto(
+    ax: plt.Axes,
+    size_base: float = 10.0,
+    grid_x: bool = True,
+    grid_y: bool = True,
+) -> None:
+    """Apply a minimal academic plot theme closely matching theme_quarto() in ggplot2."""
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    ax.tick_params(
+        axis="both",
+        which="both",
+        length=0,
+        labelsize=size_base * 0.85,
+        colors="#222222",
+    )
+    ax.xaxis.label.set_size(size_base * 0.85)
+    ax.yaxis.label.set_size(size_base * 0.85)
+    ax.set_axisbelow(True)
+    ax.grid(False, which="minor")
+    ax.xaxis.grid(grid_x, which="major", color="#e5e5e5", linewidth=0.7)
+    ax.yaxis.grid(grid_y, which="major", color="#e5e5e5", linewidth=0.7)
+
+
+# Global flag mirroring options(tinytable_tt_theme = theme_mitex)
+USE_MITEX = False
+
+
+def convert_mitex(text: str) -> str:
+    """Convert inline LaTeX math ($...$) into Typst MiTeX calls (#mi(`...`))."""
+    return re.sub(r"\$(.*?)\$", r"#mi(`\1`)", text)
+
+
+def format_cell(value: object, mitex: bool = False) -> str:
+    """Format a single Typst table cell, safely escaping literal asterisks outside math."""
+    text = "" if pd.isna(value) else str(value)
+    if mitex:
+        text = convert_mitex(text)
+    else:
+        # Escape literal '*' (e.g. regression significance stars) outside inline $...$ math
+        parts = re.split(r"(\$.*?\$)", text)
+        text = "".join(
+            part if part.startswith("$") and part.endswith("$") else part.replace("*", r"\*")
+            for part in parts
+        )
+    return f"[{text}]"
+
+
+def typst_table(
+    headers: list[str],
+    rows: list[list[object]],
+    align: list[str] | None = None,
+    col_widths: list[str] | None = None,
+    group_headers: list[tuple[str, int, int]] | None = None,
+    hlines_after: list[int] | None = None,
+    notes: str | None = None,
+    font_size: str = "0.9em",
+    mitex: bool | None = None,
+) -> Markdown:
+    """Render a booktabs-style Typst table with optional group spanners, mid-rules, and notes.
+
+    Parameters
+    ----------
+    headers : list[str]
+        Column header labels.
+    rows : list[list[object]]
+        Table body rows.
+    align : list[str], optional
+        Typst column alignments ('left', 'center', 'right').
+    col_widths : list[str], optional
+        Typst column width specifications (e.g. ['auto', '1fr', ...]).
+    group_headers : list[tuple[str, int, int]], optional
+        Spanning headers as (label, start_col_0idx, end_col_exclusive).
+    hlines_after : list[int], optional
+        0-based row indices after which to draw a thin mid-rule.
+    notes : str, optional
+        Note displayed below the table.
+    font_size : str
+        Typst font size for table content.
+    mitex : bool, optional
+        If True, convert LaTeX $...$ math to #mi(`...`). Defaults to global USE_MITEX.
+    """
+    use_mitex = USE_MITEX if mitex is None else mitex
+    ncols = len(headers)
+    if align is None:
+        align = ["left"] + ["right"] * (ncols - 1)
+    if col_widths is None:
+        col_widths = ["auto"] + ["1fr"] * (ncols - 1)
+
+    header_parts: list[str] = ["      table.hline(stroke: 0.08em),"]
+
+    if group_headers:
+        group_cells: list[str] = []
+        cmidrules: list[str] = []
+        col = 0
+        for label, start, end in sorted(group_headers, key=lambda item: item[1]):
+            while col < start:
+                group_cells.append("[]")
+                col += 1
+            span = end - start
+            lbl = convert_mitex(label) if use_mitex else label
+            group_cells.append(f"table.cell(colspan: {span}, align: center)[*{lbl}*]")
+            cmidrules.append(
+                f"      table.hline(start: {start}, end: {end}, stroke: 0.05em),"
+            )
+            col = end
+        while col < ncols:
+            group_cells.append("[]")
+            col += 1
+        header_parts.append("      " + ", ".join(group_cells) + ",")
+        header_parts.extend(cmidrules)
+
+    header_cells = ", ".join(format_cell(h, mitex=use_mitex) for h in headers)
+    header_parts.append(f"      {header_cells},")
+    header_parts.append("      table.hline(stroke: 0.05em),")
+
+    hlines_set = set(hlines_after or [])
+    body_lines: list[str] = []
+    for idx, row in enumerate(rows):
+        cells = ", ".join(format_cell(v, mitex=use_mitex) for v in row)
+        body_lines.append(f"    {cells},")
+        if idx in hlines_set:
+            body_lines.append("    table.hline(stroke: 0.05em),")
+
+    note_block = ""
+    if notes:
+        note_text = convert_mitex(notes) if use_mitex else notes
+        note_block = f"\n  #align(left)[#text(size: 0.85em)[{note_text}]]"
+
+    fence = "`" * 3
+    typst_code = "\n".join(
+        [
+            f"{fence}{{=typst}}",
+            "#block(width: 100%)[",
+            f"  #set text(size: {font_size})",
+            "  #table(",
+            f"    columns: ({', '.join(col_widths)}),",
+            f"    align: ({', '.join(align)}),",
+            "    stroke: none,",
+            "    inset: (x: 4pt, y: 4pt),",
+            "    table.header(",
+            *header_parts,
+            "    ),",
+            *body_lines,
+            "    table.hline(stroke: 0.08em),",
+            f"  ){note_block}",
+            "]",
+            fence,
+        ]
+    )
+    return Markdown(typst_code)
+
+
+def modelsummary_typst(
+    models: dict[str, object],
+    coef_map: dict[str, str],
+    gof_rows: list[tuple[str, Callable]],
+    stars: dict[str, float] | None = None,
+    group_headers: list[tuple[str, int, int]] | None = None,
+    notes: str | None = None,
+) -> Markdown:
+    """Create a modelsummary-style regression table in Typst from statsmodels results."""
+    if stars is None:
+        stars = {"+": 0.1, "*": 0.05, "**": 0.01}
+    sorted_stars = sorted(stars.items(), key=lambda item: item[1])
+
+    def star_str(pval: float) -> str:
+        for sym, thresh in sorted_stars:
+            if pval < thresh:
+                return sym
+        return ""
+
+    model_names = list(models.keys())
+    headers = [""] + model_names
+    rows: list[list[str]] = []
+
+    for raw_term, clean_label in coef_map.items():
+        est_row = [clean_label]
+        se_row = [""]
+        for m in models.values():
+            if raw_term in m.params.index:
+                est = m.params[raw_term]
+                se = m.bse[raw_term]
+                pval = m.pvalues[raw_term]
+                est_row.append(f"{est:.3f}{star_str(pval)}")
+                se_row.append(f"({se:.3f})")
+            else:
+                est_row.append("")
+                se_row.append("")
+        rows.append(est_row)
+        rows.append(se_row)
+
+    last_coef_idx = len(rows) - 1
+    for gof_label, gof_fn in gof_rows:
+        rows.append([gof_label] + [gof_fn(m) for m in models.values()])
+
+    align = ["left"] + ["center"] * len(models)
+    return typst_table(
+        headers=headers,
+        rows=rows,
+        align=align,
+        group_headers=group_headers,
+        hlines_after=[last_coef_idx],
+        notes=notes,
+        font_size="0.9em",
+    )
+```
+
+# Section as Heading Level 1
+
+Section numbering can be specified in the YAML `section-numbering` field
+as other Typst templates.
+
+## Subsection as Heading Level 2
+
+You can use LaTeX math expressions:
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \tau_h \mathbb{1}\{E_i + k = t\} +
+\varepsilon_{it}.
+$$
+
+I choose a mathematical font which supports the indicator function $\mathbb{1}\{\cdot\}$.
+Currently, I use the Libertinus Math font.
+
+### Subsubsection as Heading Level 3
+
+I don't use and don't recommend using heading levels 3 and below but it works.
+
+## Citation
+
+You can cite a reference like this [@katsushika1831] or @horst2020.
+Typst has some built-in citation styles. Check the [Typst documentation](https://typst.app/docs/reference/model/bibliography/#parameters-style) for more information.
+
+# Figures and Tables
+
+## Figures
+
+As @fig-facet shows, the caption is displayed below the figure.
+As a caption of the figure (`fig-cap`), I use bold text for the title and use a normal text for the description.
+
+```{python}
+#| fig-width: 6
+#| fig-height: 3
+#| label: fig-facet
+#| fig-cap: |
+#|   **Flipper Length and Bill Length of Penguins**.
+#|   The x-axis shows the flipper length, and the y-axis shows the bill length.
+
+df_facet = penguins.dropna(subset=["sex", "flipper_length_mm", "bill_length_mm"]).copy()
+facets = [("male", "Male"), ("female", "Female")]
+
+fig, axes = plt.subplots(1, 2, figsize=(6, 3), sharex=True, sharey=True)
+
+for ax, (sex_val, facet_title) in zip(axes, facets):
+    sub_sex = df_facet[df_facet["sex"] == sex_val]
+    for sp in SPECIES_ORDER:
+        sub = sub_sex[sub_sex["species"] == sp]
+        ax.scatter(
+            sub["flipper_length_mm"],
+            sub["bill_length_mm"],
+            color=SPECIES_COLORS[sp],
+            marker=SPECIES_MARKERS[sp],
+            s=22,
+            label=sp,
+        )
+        slope, intercept = np.polyfit(sub["flipper_length_mm"], sub["bill_length_mm"], 1)
+        xs = np.linspace(sub["flipper_length_mm"].min(), sub["flipper_length_mm"].max(), 50)
+        ax.plot(xs, slope * xs + intercept, color=SPECIES_COLORS[sp], linewidth=1.6)
+
+    ax.set_title(facet_title, loc="left", fontsize=9.5, fontweight="bold", pad=6)
+    apply_theme_quarto(ax)
+
+fig.supxlabel("Flipper Length (mm)", fontsize=8.5, y=0.02)
+axes[0].set_ylabel("Bill Length (mm)")
+axes[1].legend(
+    loc="lower right",
+    frameon=False,
+    fontsize=7.5,
+    handletextpad=0.3,
+    labelspacing=0.25,
+)
+fig.tight_layout(rect=[0, 0.04, 1, 1])
+plt.show()
+```
+
+When I want to show multiple figures side by side, I combine subplots in a single `matplotlib` figure (`plt.subplots(1, 2)`), serving the same role as `patchwork` in R.
+The reason why I don't use the `layout-ncol` option is that the caption is also split into two parts.
+
+```{python}
+#| fig-width: 6
+#| fig-height: 3
+#| label: fig-patchwork
+#| fig-cap: |
+#|   **Characteristics of Penguins**.
+#|   The left panel shows the relationship between flipper length and body mass.
+#|   The right panel shows the density of flipper length.
+
+df_plot = penguins.dropna(subset=["flipper_length_mm", "body_mass_g"]).copy()
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6, 3))
+
+# Left panel: scatter of flipper length vs body mass
+for sp in SPECIES_ORDER:
+    sub = df_plot[df_plot["species"] == sp]
+    ax1.scatter(
+        sub["flipper_length_mm"],
+        sub["body_mass_g"],
+        color=SPECIES_COLORS[sp],
+        marker=SPECIES_MARKERS[sp],
+        s=22,
+        label=sp,
+    )
+ax1.set_xlabel("Flipper Length (mm)")
+ax1.set_ylabel("Body Mass (g)")
+apply_theme_quarto(ax1, grid_x=True, grid_y=True)
+ax1.legend(
+    loc="lower right",
+    frameon=False,
+    fontsize=7.5,
+    handletextpad=0.3,
+    labelspacing=0.25,
+)
+
+# Right panel: kernel density of flipper length
+x_grid = np.linspace(
+    df_plot["flipper_length_mm"].min() - 5,
+    df_plot["flipper_length_mm"].max() + 5,
+    200,
+)
+for sp in SPECIES_ORDER:
+    vals = df_plot.loc[df_plot["species"] == sp, "flipper_length_mm"].to_numpy()
+    kde = gaussian_kde(vals)
+    ax2.plot(x_grid, kde(x_grid), color=SPECIES_COLORS[sp], linewidth=1.6, label=sp)
+
+ax2.set_xlabel("Flipper Length (mm)")
+ax2.set_ylabel("Density")
+apply_theme_quarto(ax2, grid_x=False, grid_y=True)
+ax2.legend(
+    loc="upper right",
+    frameon=False,
+    fontsize=7.5,
+    handletextpad=0.3,
+    labelspacing=0.25,
+)
+
+fig.tight_layout()
+plt.show()
+```
+
+## Tables
+
+You can render booktabs-style general tables and regression tables directly to Typst using `pandas`, `statsmodels`, and the lightweight `typst_table()` / `modelsummary_typst()` helpers defined in the setup chunk.
+As @tbl-sum-penguins shows, the caption is displayed above the table.
+The notes of the table can be added using the `notes` argument.
+
+```{python}
+#| label: tbl-sum-penguins
+#| tbl-cap: Summary Statistics of Penguins
+
+metrics = ["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]
+summary = (
+    penguins.dropna(subset=["sex"])
+    .groupby(["species", "sex"], as_index=False)[metrics]
+    .mean()
+    .pivot(index="species", columns="sex", values=metrics)
+    .reindex(SPECIES_ORDER)
+)
+
+ordered_cols = [(m, "male") for m in metrics] + [(m, "female") for m in metrics]
+summary = summary[ordered_cols]
+
+headers = [
+    "",
+    "Bill Length (mm)",
+    "Bill Depth (mm)",
+    "Flipper Length (mm)",
+    "Body Mass (g)",
+    "Bill Length (mm)",
+    "Bill Depth (mm)",
+    "Flipper Length (mm)",
+    "Body Mass (g)",
+]
+
+rows = [
+    [sp] + [f"{summary.loc[sp, col]:.4g}" for col in ordered_cols]
+    for sp in summary.index
+]
+
+typst_table(
+    headers=headers,
+    rows=rows,
+    group_headers=[("Male", 1, 5), ("Female", 5, 9)],
+    notes="Notes: Data from Palmer penguins dataset.",
+    font_size="0.8em",
+)
+```
+
+In @tbl-regression, `modelsummary_typst()` formats `statsmodels` OLS regression results with grouped headers by dependent variable, significance stars, standard errors in parentheses, and goodness-of-fit statistics.
+
+```{python}
+#| label: tbl-regression
+#| tbl-cap: Regression Results of Penguins
+
+models = {
+    "(1)": smf.ols("bill_length_mm ~ C(species)", data=penguins).fit(),
+    "(2)": smf.ols("bill_length_mm ~ C(species) + C(sex)", data=penguins).fit(),
+    "(3)": smf.ols("bill_length_mm ~ C(species) + C(sex) + year", data=penguins).fit(),
+    "(4)": smf.ols("body_mass_g ~ C(species)", data=penguins).fit(),
+    "(5)": smf.ols("body_mass_g ~ C(species) + C(sex)", data=penguins).fit(),
+    "(6)": smf.ols("body_mass_g ~ C(species) + C(sex) + year", data=penguins).fit(),
+}
+
+coef_map = {
+    "C(species)[T.Chinstrap]": "Chinstrap",
+    "C(species)[T.Gentoo]": "Gentoo",
+    "C(sex)[T.male]": "Male",
+    "year": "Year",
+}
+
+gof_rows = [
+    ("Observations", lambda m: f"{int(m.nobs)}"),
+    ("$R^2$", lambda m: f"{m.rsquared:.3f}"),
+]
+
+modelsummary_typst(
+    models=models,
+    coef_map=coef_map,
+    gof_rows=gof_rows,
+    stars={"+": 0.1, "*": 0.05, "**": 0.01},
+    group_headers=[("Bill Length (mm)", 1, 4), ("Body Mass (g)", 4, 7)],
+    notes=r"Notes: Data from Palmer penguins dataset. + $p < 0.1$, \* $p < 0.05$, \*\* $p < 0.01$.",
+)
+```
+
+Typst tables do not natively evaluate LaTeX math expressions inside cells, yet keeping LaTeX math syntax in your analysis code is valuable for compatibility if you ever convert the document to LaTeX for journal submission.
+
+A workaround is to use [MiTeX](https://typst.app/universe/package/mitex/),
+a Typst package that allows you to use LaTeX math expressions in Typst.
+Just like `theme_mitex` for `tinytable` in R, setting `USE_MITEX = True` converts inline LaTeX math (`$...$`) to MiTeX expressions (`#mi(...)`) in our Typst table output.
+The following table includes LaTeX math expressions that are automatically converted to MiTeX expressions in the Typst output.
+
+```{python}
+#| label: prep-mitex
+USE_MITEX = True
+```
+
+```{python}
+#| label: tbl-math
+#| tbl-cap: Math Symbols
+
+df_math = pd.DataFrame({"Math": [r"$\alpha$", r"$a_{it}$", r"$e^{i\pi} + 1 = 0$"]})
+typst_table(
+    headers=list(df_math.columns),
+    rows=df_math.values.tolist(),
+    align=["left"],
+    col_widths=["1fr"],
+)
+```
+
+# Last words
+
+I made this template for my working papers, so it may not be suitable for other fields than economics.
+I am happy to receive feedback and suggestions for improvement.
+
+{{< appendix >}}
+
+# Supplemental Figures
+
+The section numbering will be changed to "A.1.1" in the appendix.
+The second section in the appendix will be "B".
+On the other hand, the figure numbering will be reset to "A.1", "A.2"
+so that it is clear that these figures are part of the appendix.
+The "A" stands for the "Appendix", not the section numbering.
+
+![**The Great Wave off Kanagawa**. A woodblock print by @katsushika1831.](img/hokusai_kanagawa.jpg){#fig-img width=80%}
+
+{{< pagebreak >}}
+<!-- Bibliography -->

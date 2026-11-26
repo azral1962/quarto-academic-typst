@@ -1,0 +1,11 @@
+_quarto.yml
+docs/
+*.Rproj
+static/
+snapshot.R
+img/template-full.png
+rproject.toml
+rv.lock
+rv/
+.Rprofile
+README.qmd

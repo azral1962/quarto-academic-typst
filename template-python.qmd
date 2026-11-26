@@ -1,0 +1,197 @@
+---
+title: Quarto Academic Typst
+subtitle: A minimalistic Quarto + Typst template for academic writing
+author:
+  - name: Kazuharu Yanagimoto
+    email: kazuharu.yanagimoto@cemfi.edu.es
+    orcid: 0009-0007-1967-8304
+    affiliations:
+      - name: CEMFI
+abstract: |
+  {{< lipsum 1 >}}
+thanks: |
+  You can write acknowledgements here.
+keywords:
+  - Quarto
+  - Typst
+  - format
+date: today
+date-format: full
+bibliography: references.bib
+format:
+  academic-typst:
+    section-numbering: "1.1.1"
+jupyter: python3
+execute:
+  echo: false
+---
+
+```{python}
+#| label: setup
+import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import Markdown
+
+# Classic mtcars dataset (built-in here so this minimal template works offline)
+mtcars = pd.DataFrame(
+    [
+        ("Mazda RX4", 21.0, 6, 160.0, 110, 3.90, 2.620),
+        ("Mazda RX4 Wag", 21.0, 6, 160.0, 110, 3.90, 2.875),
+        ("Datsun 710", 22.8, 4, 108.0, 93, 3.85, 2.320),
+        ("Hornet 4 Drive", 21.4, 6, 258.0, 110, 3.08, 3.215),
+        ("Hornet Sportabout", 18.7, 8, 360.0, 175, 3.15, 3.440),
+        ("Valiant", 18.1, 6, 225.0, 105, 2.76, 3.460),
+        ("Duster 360", 14.3, 8, 360.0, 245, 3.21, 3.570),
+        ("Merc 240D", 24.4, 4, 146.7, 62, 3.69, 3.190),
+        ("Merc 230", 22.8, 4, 140.8, 95, 3.92, 3.150),
+        ("Merc 280", 19.2, 6, 167.6, 123, 3.92, 3.440),
+        ("Merc 280C", 17.8, 6, 167.6, 123, 3.92, 3.440),
+        ("Merc 450SE", 16.4, 8, 275.8, 180, 3.07, 4.070),
+        ("Merc 450SL", 17.3, 8, 275.8, 180, 3.07, 3.730),
+        ("Merc 450SLC", 15.2, 8, 275.8, 180, 3.07, 3.780),
+        ("Cadillac Fleetwood", 10.4, 8, 472.0, 205, 2.93, 5.250),
+        ("Lincoln Continental", 10.4, 8, 460.0, 215, 3.00, 5.424),
+        ("Chrysler Imperial", 14.7, 8, 440.0, 230, 3.23, 5.345),
+        ("Fiat 128", 32.4, 4, 78.7, 66, 4.08, 2.200),
+        ("Honda Civic", 30.4, 4, 75.7, 52, 4.93, 1.615),
+        ("Toyota Corolla", 33.9, 4, 71.1, 65, 4.22, 1.835),
+        ("Toyota Corona", 21.5, 4, 120.1, 97, 3.70, 2.465),
+        ("Dodge Challenger", 15.5, 8, 318.0, 150, 2.76, 3.520),
+        ("AMC Javelin", 15.2, 8, 304.0, 150, 3.15, 3.435),
+        ("Camaro Z28", 13.3, 8, 350.0, 245, 3.73, 3.840),
+        ("Pontiac Firebird", 19.2, 8, 400.0, 175, 3.08, 3.845),
+        ("Fiat X1-9", 27.3, 4, 79.0, 66, 4.08, 1.935),
+        ("Porsche 914-2", 26.0, 4, 120.3, 91, 4.43, 2.140),
+        ("Lotus Europa", 30.4, 4, 95.1, 113, 3.77, 1.513),
+        ("Ford Pantera L", 15.8, 8, 351.0, 264, 4.22, 3.170),
+        ("Ferrari Dino", 19.7, 6, 145.0, 175, 3.62, 2.770),
+        ("Maserati Bora", 15.0, 8, 301.0, 335, 3.54, 3.570),
+        ("Volvo 142E", 21.4, 4, 121.0, 109, 4.11, 2.780),
+    ],
+    columns=["model", "mpg", "cyl", "disp", "hp", "drat", "wt"],
+).set_index("model")
+
+
+def typst_table(df: pd.DataFrame, width: str = "80%", notes: str | None = None) -> Markdown:
+    """Render a pandas DataFrame as a booktabs-style Typst table with optional notes."""
+    ncols = len(df.columns)
+    cols_spec = "(" + ", ".join(["1fr"] * ncols) + ")"
+    align_spec = "(" + ", ".join(["right"] * ncols) + ")"
+    header_cells = ", ".join(f"[{col}]" for col in df.columns)
+
+    body_lines = []
+    for _, row in df.iterrows():
+        cells = ", ".join(f"[{val}]" for val in row)
+        body_lines.append(f"      {cells},")
+
+    note_block = ""
+    if notes:
+        note_block = f"\n  #align(left)[#text(size: 0.85em)[{notes}]]"
+
+    fence = "`" * 3
+    typst_code = "\n".join(
+        [
+            f"{fence}{{=typst}}",
+            f"#block(width: {width})[",
+            "  #table(",
+            f"    columns: {cols_spec},",
+            f"    align: {align_spec},",
+            "    stroke: none,",
+            "    table.hline(stroke: 0.08em),",
+            f"    table.header({header_cells}),",
+            "    table.hline(stroke: 0.05em),",
+            *body_lines,
+            "    table.hline(stroke: 0.08em),",
+            f"  ){note_block}",
+            "]",
+            fence,
+        ]
+    )
+    return Markdown(typst_code)
+```
+
+This document shows a minimal Python example of the template.
+For more information, see the full Python example in `template-full-python.qmd`.
+
+# Section as Heading Level 1
+
+Section numbering can be specified in the YAML `section-numbering` field
+as other Typst templates.
+
+## Subsection as Heading Level 2
+
+You can use LaTeX math expressions:
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \tau_h \mathbb{1}\{E_i + k = t\} +
+\varepsilon_{it}.
+$$
+
+### Subsubsection as Heading Level 3
+
+I don't use and don't recommend using heading levels 3 and below but it works.
+
+## Citation
+
+You can cite a reference like this [@katsushika1831] or @horst2020.
+Typst has some built-in citation styles. Check the [Typst documentation](https://typst.app/docs/reference/model/bibliography/#parameters-style) for more information.
+
+# Figures and Tables
+
+## Figures
+
+As @fig-hist-mpg shows, the caption is displayed below the figure.
+As a caption of the figure (`fig-cap`), I use bold text for the title and use a normal text for the description.
+
+```{python}
+#| label: fig-hist-mpg
+#| fig-cap: "**Histogram of Miles per Gallon**. The x-axis shows the miles per gallon, and the y-axis shows the frequency."
+
+fig, ax = plt.subplots(figsize=(6, 4))
+ax.hist(mtcars["mpg"], bins=5, color="lightgray", edgecolor="black")
+ax.set_title("Histogram of mtcars.mpg")
+ax.set_xlabel("mpg")
+ax.set_ylabel("Frequency")
+fig.tight_layout()
+plt.show()
+```
+
+## Tables
+
+You can render booktabs-style academic tables directly to Typst from `pandas` using a lightweight helper function (or packages such as `great_tables` / `tabulate`).^[Generating raw Typst `#table(...)` blocks gives full control over booktabs rules, column spans, and table notes with no R dependency.]
+As @tbl-mtcars-head shows, the caption is displayed above the table.
+The notes of the table can be added using the `notes` argument of the `typst_table()` helper function.
+
+```{python}
+#| label: tbl-mtcars-head
+#| tbl-cap: Head of the mtcars Dataset
+
+nt = "_Notes_: This table shows the first five rows of the mtcars dataset."
+typst_table(mtcars.iloc[:5, :5], width="80%", notes=nt)
+```
+
+# Last words
+
+I made this template for my working papers, so it may not be suitable for other fields than economics.
+I am happy to receive feedback and suggestions for improvement.
+
+{{< appendix >}}
+
+# Supplemental Figures
+
+The figure numbering will be reset to "A.1", "A.2", etc so that it is clear that these figures are part of the appendix.
+
+```{python}
+#| label: fig-scatter-car
+#| fig-cap: "**Scatter Plot of Car Data**. The x-axis shows the weight of the car, and the y-axis shows the miles per gallon."
+
+fig, ax = plt.subplots(figsize=(6, 4))
+ax.scatter(mtcars["wt"], mtcars["mpg"], facecolors="none", edgecolors="black")
+ax.set_xlabel("wt")
+ax.set_ylabel("mpg")
+fig.tight_layout()
+plt.show()
+```
+
+{{< pagebreak >}}
+<!-- Bibliography -->
